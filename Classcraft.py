@@ -11,12 +11,6 @@ from credentials import ccreds
 import datetime
 from Aux import progressBar
 
-COURSES = {
-    'VAS': 'https://game.classcraft.com/teacher/class/x8WSt5QAFyT7uLqSW/dashboard',
-    'TBP': 'https://game.classcraft.com/teacher/class/EHgASf9cbaev2G8wu/dashboard',
-    'DP': 'https://game.classcraft.com/teacher/class/265SgAibEnhkrw669/dashboard',
-    'Demo': 'https://game.classcraft.com/teacher/class/qwdHFoExakRubwo9m/dashboard'
-}
 
 DRIVER = None
 
@@ -140,7 +134,7 @@ def giveFeedback(student: str, positive: bool = True, behav: int = 1) -> None:
             print(f"{student} cannot be rewarded.")
             return
     else:
-        return # uncomment this to avoid giving negative feedback
+        # return # uncomment this to avoid giving negative feedback
         sleep(1)
         try:
             clickIt(DRIVER.find_element_by_id("addNegativeBtn"))

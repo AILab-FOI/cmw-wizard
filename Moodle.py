@@ -19,20 +19,6 @@ from credentials import creds
 from Aux import identify_outliers, typeText, saveToGSheets, progressBar
 import Classcraft
 
-COURSES = {
-    "VAS": {
-        "link": "https://elf.foi.hr/course/view.php?id=133",
-        "fullname": "Višeagentni sustavi"
-    },
-    "DP": {
-        "link": "https://elf.foi.hr/course/view.php?id=164",
-        "fullname": "Deklarativno programiranje"
-    },
-    "TBP": {
-        "link": "https://elf.foi.hr/course/view.php?id=135",
-        "fullname": "Teorija baza podataka"
-    }
-}
 
 FILENAME = []
 
@@ -557,10 +543,10 @@ def main(link: str, identify: bool = False, suggest: bool = False, scoring: bool
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
-        description="A script for opening ELF in a browser and collecting and providing feedback on workshops."
+        description="A script for opening ELF in a browser and collecting and providing feedback on workshops.\n\nE.g.:\n- Moodle.py -w link_to_workshop [ --options ]\n- Moodle.py -c link_to_course [ --options ]"
     )
     parser.add_argument("-c", "--courses", type=str, nargs="*",
-                        default=["VAS", "TBP", "DP"], help="A list of acronym(s) of the course(s)")
+                        default=None, help="A list of link(s) of the course(s)")
     parser.add_argument("-w", "--workshops", type=str, nargs="*",
                         default=None, help="A list of link(s) to specific workshop(s)")
     parser.add_argument("--select", dest="select", action="store_true",
@@ -630,7 +616,7 @@ if __name__ == '__main__':
                  gSheets=args.gSheets)
     else:
         for c in args.courses:
-            link = getWorkshopLink(COURSES[c]["link"])
+            link = getWorkshopLink(c)
             main(link,
                  suggest=args.select,
                  download=args.download,

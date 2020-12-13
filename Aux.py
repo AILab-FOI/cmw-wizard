@@ -55,7 +55,6 @@ def saveToGSheets(data: dict, course: str, assignment: str):
     sheet.update("D1", [["in", "out", "Σ"]])
 
     for num, row in progressBar(sheet.get_all_values(), prefix = 'Storing grades in GSheet:', suffix = 'grades stored.', length = 20):
-    # for num, row in enumerate(sheet.get_all_values(), start=1):
         fullname = ' '.join(row[:2])
         if fullname in data:
             student = data[fullname]
