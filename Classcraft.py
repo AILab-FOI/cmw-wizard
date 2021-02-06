@@ -9,7 +9,8 @@ import argparse
 import time
 from credentials import ccreds
 import datetime
-from Aux import progressBar
+import json
+from Aux import progressBar, calculateActivityPoints, saveToGSheets
 
 
 DRIVER = None
@@ -40,7 +41,7 @@ def findElementXpath(xpath: str, single: bool = True) -> WebElement:
                 )
             success = True
             return element
-        except:
+        except Exception as ex:
             now = datetime.datetime.now() - start
             now = now.seconds
             sleep(now / 13 if now / 13 > 0.1 else 0.1)
@@ -49,14 +50,17 @@ def findElementXpath(xpath: str, single: bool = True) -> WebElement:
 
 
 def doClasscraftLogin(usr: str, password: str):
-    e = findElementXpath('//div[@class="Login__toggle-button-wrap"]/button')
-    clickIt(e)
-    sleep(1)
-    DRIVER.find_element_by_id("input:username").send_keys(
-        usr,
-        Keys.TAB,
-        password,
-        Keys.ENTER)
+    try:
+        e = findElementXpath('//div[@class="Login__toggle-button-wrap"]/button')
+        clickIt(e)
+        sleep(1)
+        DRIVER.find_element_by_id("input:username").send_keys(
+            usr,
+            Keys.TAB,
+            password,
+            Keys.ENTER)
+    except Exception as ex:
+        print("Didn't need to login, already logged in.")
 
 
 def skipWalkthrough():
@@ -71,7 +75,7 @@ def openCourse(course: str):
     sleep(1)
     try:
         e.location_once_scrolled_into_view()
-    except:
+    except Exception as ex:
         pass
     clickIt(e)
 
@@ -80,34 +84,54 @@ def openCourse(course: str):
         '//div[contains(@class, "PlayerList scroll")]/div[@class="PlayerListItem"][2]')
     clickIt(e)
 
-    try:
-        skipWalkthrough()
-        pass
-    except Exception as e:
-        print(e)
-        pass
+    # try:
+    #     skipWalkthrough()
+    #     pass
+    # except Exception as ex:
+    #     print(ex)
+    #     pass
 
 
-def openListOfStudents():
+def openQuests():
+    sleep(2)
+
+    e = findElementXpath(
+        '//button[contains(@class, "TippyButton sidebarItem-general-quest")]/*[@class="Icon general-quest"]')
+    clickIt(e)
+
+
+def openGameDashboard():
     sleep(2)
 
     e = findElementXpath(
         '//button[contains(@class, "TippyButton sidebarItem-general-users")]/*[@class="Icon general-users"]')
     clickIt(e)
+
+
+def openListOfStudents():
+    openGameDashboard()
 
     e = findElementXpath('//div[@class="headerCenter"]/a[1]')
     clickIt(e)
 
 
 def openClassList():
-    sleep(2)
-
-    e = findElementXpath(
-        '//button[contains(@class, "TippyButton sidebarItem-general-users")]/*[@class="Icon general-users"]')
-    clickIt(e)
+    openGameDashboard()
 
     e = findElementXpath('//div[@class="headerCenter"]/a[3]')
     clickIt(e)
+
+
+def openListOfTeams():
+    openGameDashboard()
+
+    e = findElementXpath('//div[@class="headerCenter"]/a[2]')
+    clickIt(e)
+
+
+def getCourseName():
+    e = findElementXpath('//div[@class="headerLeftTop"]//span')
+    return e.text
 
 
 def filterStudent(student: str):
@@ -126,19 +150,56 @@ def giveFeedback(student: str, positive: bool = True, behav: int = 1) -> None:
     clickIt(e)
 
     sleep(1)
+    if not positive and behav == 9:
+        try:
+            e = findElementXpath('//button[@class="DS_MoreOptionsButton"]')
+            clickIt(e)
+            e = findElementXpath(
+                '//div[contains(@class, "DS_MoreOptionsDropdown")]/div[1]/button[1]')
+            clickIt(e)
+            DRIVER.find_element_by_id(
+                'editStats_hp').send_keys(Keys.SUBTRACT, '20')
+            DRIVER.find_element_by_id(
+                'editStats_ap').send_keys(Keys.SUBTRACT, '10')
+            DRIVER.find_element_by_id(
+                'editStats_xp').send_keys(Keys.SUBTRACT, '750')
+            DRIVER.find_element_by_id(
+                'editStats_gp').send_keys(Keys.SUBTRACT, '90')
+            DRIVER.find_element_by_id('description').send_keys(
+                'HR: Tjedni zadatak uspješno neuspio. -- EN: Weekly quest failed successfully.')
+            e = DRIVER.find_element_by_id('applyStatsBtn')
+            clickIt(e)
+            sleep(1)
+            e = findElementXpath('//div[@class="playerCard takeDmgBtn"]')
+            clickIt(e)
+            sleep(1)
+            try:
+                e = DRIVER.find_element_by_id('acceptFateButton')
+                clickIt(e)
+                sleep(1)
+                e = findElementXpath('//div[@class="batchDamageBtn dealLaterBtn"]')
+                clickIt(e)
+                sleep(1)
+            except Exception as e:
+                pass
+            return
+        except Exception as ex:
+            print(f'{student} cannot be penalised.')
+            return
+
     if positive:
         sleep(1)
         try:
             clickIt(DRIVER.find_element_by_id("addPositiveBtn"))
-        except Exception as e:
+        except Exception as ex:
             print(f"{student} cannot be rewarded.")
             return
     else:
-        # return # uncomment this to avoid giving negative feedback
+        # return  # uncomment this to avoid giving negative feedback
         sleep(1)
         try:
             clickIt(DRIVER.find_element_by_id("addNegativeBtn"))
-        except Exception as e:
+        except Exception as ex:
             print(f"{student} cannot be penalised.")
             return
 
@@ -162,7 +223,7 @@ def acknowledgeBehaviour(student: str, positive: bool = True, behav: int = 1) ->
 def acknowledgeBehaviours(students: dict) -> None:
     openListOfStudents()
 
-    for _, (k, v) in progressBar(students.items(), prefix = 'Applying behaviours:', suffix = 'behaviours applied.', length = 20):
+    for _, (k, v) in progressBar(students.items(), prefix='Applying behaviours:', suffix='behaviours applied.', length=20):
         giveFeedback(k, v['positive'], v['behaviour'])
 
 
@@ -171,8 +232,18 @@ def readQuestFeedback(students: dict) -> list:
     e = findElementXpath(
         '//table[@class="ObjectiveProgressTableWrapper"]/tbody/tr', single=False)
 
-    for _, aFeedback in progressBar(e, prefix = 'Getting assignment status:', suffix = 'assignment statuses collected.', length = 20):
+    for _, aFeedback in progressBar(e, prefix='Getting assignment status:', suffix='assignment statuses collected.', length=20):
         student = aFeedback.find_element_by_xpath('./td[1]/span').text
+
+        try:
+            state = aFeedback.find_element_by_xpath(
+                './/div/label[2]').get_attribute('class')
+
+            if "selected" in state:
+                feedback[student] = {'positive': False, 'behaviour': 9}
+                continue
+        except Exception as ex:
+            pass
 
         try:
             state = aFeedback.find_element_by_xpath(
@@ -181,8 +252,8 @@ def readQuestFeedback(students: dict) -> list:
             if "dot late" in state:
                 feedback[student] = {'positive': False, 'behaviour': 2}
             elif "dot timely" in state or "dot early" in state:
-                feedback[student] = {'positive': True, 'behaviour': 2}
-        except:
+                feedback[student] = {'positive': True, 'behaviour': 3}
+        except Exception as ex:
             continue
 
     # print(feedback)
@@ -201,30 +272,28 @@ def giveQuestFeedback(questName: str = None, behavs: bool = False):
         students[name.text] = {'positive': False, 'behaviour': 1}
         try:
             name.location_once_scrolled_into_view
-        except Exception as e:
+        except Exception as ex:
             pass
         try:
             name = name.find_element_by_xpath(
                 './following-sibling::div[contains(@class,"PlayerListItem")]')
-        except Exception as e:
+        except Exception as ex:
             break
 
     # print(students)
 
-    e = findElementXpath(
-        '//button[contains(@class, "TippyButton sidebarItem-general-quest")]/*[@class="Icon general-quest"]')
-    clickIt(e)
+    openQuests()
 
-    e = findElementXpath('//div[@class="headerLeftTop"]//span')
-    course = e.text
+    course = getCourseName()
 
     if questName:
         try:
             e = findElementXpath(
                 f'//div[@class="title"][contains(text(),"{questName}")]/../..')
             clickIt(e)
-        except Exception as e:
-            print(f"Quest name was given ({questName}), but no such quest found.")
+        except Exception as ex:
+            print(
+                f"Quest name was given ({questName}), but no such quest found.")
             return
     else:
         e = findElementXpath('//div[@class="QuestNode"]')
@@ -243,7 +312,8 @@ def giveQuestFeedback(questName: str = None, behavs: bool = False):
                 '//div[contains(@class, "TippyDropDownTooltip")]/a[last()]')
             clickIt(e)
 
-    e = findElementXpath('//button[@class="TippyDropDown breadcrumb clickable"]/span')
+    e = findElementXpath(
+        '//button[@class="TippyDropDown breadcrumb clickable"]/span')
     questName = e.text
 
     e = findElementXpath(
@@ -264,32 +334,94 @@ def giveQuestFeedback(questName: str = None, behavs: bool = False):
         acknowledgeBehaviours(feedback)
 
 
-def getTeams():
+def fetchStudentInfo():
+    students = {}
+
+    openListOfTeams()
+
+    data = findElementXpath('//div[@class="teacherDashboard_teamWrapper"]', False)
+
+    for _, entry in progressBar(data, prefix='Getting student info:', suffix='student stats collected.', length=20):
+        entry.location_once_scrolled_into_view
+
+        teamName = entry.find_element_by_xpath('.//div[@class="teamName"]').text
+
+        for student in entry.find_elements_by_xpath('.//tr[@class="playerContainer"]'):
+            student.location_once_scrolled_into_view
+            try:
+                studentName = student.find_element_by_xpath('.//td[@class="nameWrapper"]').text
+                stats = student.find_elements_by_xpath('.//span[@class="current"]')
+            except Exception as ex:
+                pass
+            try:
+                studentLevel = int(student.find_element_by_xpath('.//td[6]').text)
+            except Exception as ex:
+                studentLevel = None
+            try:
+                studentClass = student.find_element_by_xpath('.//td[@class="classWrapper"]').text
+            except Exception as ex:
+                studentClass = None
+
+            if not stats:
+                students.update({
+                    studentName: None
+                })
+                continue
+
+            students.update({
+                studentName: {
+                    'team': teamName,
+                    'stats': {
+                        'hp': int(stats[0].text.replace(" ", "")),
+                        'ap': int(stats[1].text.replace(" ", "")),
+                        'xp': int(stats[2].text.replace(" ", "")),
+                        'gp': int(stats[3].text.replace(" ", ""))
+                    },
+                    'lvl': studentLevel,
+                    'avatarClass': studentClass
+                }
+            })
+
+    students.update({
+        'course': getCourseName(),
+        'time': datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    })
+
+    with open(f'{getCourseName().replace("/","-")} :: stats - {datetime.datetime.now().strftime("%Y-%m-%d %H:%M")}.json', "w", encoding='utf8') as jsonFile:
+        json.dump(students, jsonFile, ensure_ascii=False)
+
+    return students
+
+
+def main(course: str, feedback: dict = None, quests: list = None, behavs: bool = False, getInfo: bool = False):
     DRIVER.get("https://game.classcraft.com/teacher/home")
     sleep(1)
 
-    try:
-        doClasscraftLogin(ccreds['user'], ccreds['password'])
-    except Exception as e:
-        print(e)
-        pass
+    doClasscraftLogin(ccreds['user'], ccreds['password'])
+
+    while True:
+        try:
+            findElementXpath('//li[@id="react-tabs-0"]')
+            break
+        except Exception as ex:
+            DRIVER.refresh()
 
     openCourse(course)
 
-    return True
+    if getInfo:
+        info = fetchStudentInfo()
 
+        points = calculateActivityPoints(info)
 
-def main(course: str, feedback: dict = None, quests: list = None, behavs: bool = False):
-    DRIVER.get("https://game.classcraft.com/teacher/home")
-    sleep(1)
+        print(points)
 
-    try:
-        doClasscraftLogin(ccreds['user'], ccreds['password'])
-    except Exception as e:
-        print(e)
-        pass
+        saveToGSheets(
+            data=points,
+            course=getCourseName(),
+            assignment='Aktivnost A',
+            keys=['lvl', 'activity'])
 
-    openCourse(course)
+        return True
 
     if feedback:
         print(feedback)
@@ -298,8 +430,10 @@ def main(course: str, feedback: dict = None, quests: list = None, behavs: bool =
         if quests:
             for q in quests:
                 giveQuestFeedback(questName=q, behavs=behavs)
-        else:
+        elif behavs:
             giveQuestFeedback(behavs=behavs)
+
+    return True
 
 
 if __name__ == '__main__':
@@ -312,21 +446,22 @@ if __name__ == '__main__':
                         default=None, help="Name(s) or a part of the name of the quest(s). Default: None")
     parser.add_argument("--grade", dest="grade", default=False, action="store_true",
                         help="Acknowledge (apply) behaviours as well. Default: False")
-    parser.add_argument("--teams", dest="teams", default=False, action="store_true",
-                        help="Store users and their teams in a file. It ignores all other options. Default: False. Not yet implemented")
-    parser.add_argument("--gui", dest="gui", action="store_true", default=False, help="Show GUI. ")
+    parser.add_argument("--info", dest="info", default=False, action="store_true",
+                        help="Fetch and store information (teams and stats) on students of a class. Default: False.")
+    parser.add_argument("--gui", dest="gui", action="store_true",
+                        default=False, help="Show GUI. ")
     args = parser.parse_args()
 
     opt = Options()
     if not args.gui:
-        opt.add_argument("--headless")
+        opt.headless = True
     opt.add_argument("--incognito")
     DRIVER = webdriver.Chrome(options=opt, executable_path="./chromedriver")
 
+    if args.info:
+        DRIVER.set_window_size(1042, 600)
+
     for c in args.courses:
-        if args.teams:
-            getTeams(c)
-            continue
-        main(course=c, quests=args.quests, behavs=args.grade)
+        main(course=c, quests=args.quests, behavs=args.grade, getInfo=args.info)
 
     DRIVER.quit()
